@@ -43,9 +43,15 @@ It supports HTTPS, SSH, and LFS. Addtionally, the LFS protocol is detected autom
     # Default: true
     ssh_strict_host_key_checking: ''
 
-    # Disable force push to protect the target repository
+    # Push only the workflow branch without force
+    # Other target branches are left untouched
+    # Tags are still force-pushed
     # Default: false
     disable_force_push: ''
+
+    # Branch to push in safe mode
+    # Defaults to the branch that triggered the workflow
+    branch: ''
 
     # Test the push without actually sending data
     # Default: false
@@ -56,7 +62,8 @@ It supports HTTPS, SSH, and LFS. Addtionally, the LFS protocol is detected autom
 
 The most common GitHub mirroring workflow I could find is `--mirror` (force push) on any push (or on push to the `main` branch).
 
-It is recommended to run mirroring workflow in unique concurrency group (without any ref) to mitigate race condition risk.
+It is recommended to run mirroring workflow in a unique concurrency group (without any ref) to mitigate race condition risk.
+Additionally, it is best to define a workflow environment, so all secrets will be isolated similar to how automated publishing on PyPI and other registries is set up.
 
 Create a workflow file (i.e. `.github/workflows/mirror.yml`) in your source repository (the one you wish to mirror) with the following contents:
 
@@ -78,12 +85,14 @@ concurrency:
 jobs:
   mirror:
     runs-on: ubuntu-latest
+    environment:
+      name: mirror # environment-scoped secrets are available only to jobs using this environment
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
-          # Uncomment lfs: true if your repository contains LFS objects. 
+          # Uncomment lfs: true if your repository contains LFS objects.
           # Otherwise, the action will only push the LFS pointer files.
           # lfs: true
 
@@ -96,7 +105,7 @@ jobs:
           # disable_force_push: 'true'
 ```
 
-Then, set up the following Actions variables:
+Because the job uses the `mirror` environment, add these as environment variables in **Settings > Environments > mirror**:
 
 - `TARGET_REPO` - target repository URL in HTTPS or SSH format
 - `SSH_KNOWN_HOSTS` - contents of the `known_hosts` file that includes your target repository
@@ -111,7 +120,7 @@ Then, set up the following Actions variables:
 > codeberg.org ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAy...
 > ```
 
-Also, set up secrets:
+Add this as an environment secret in **Settings > Environments > mirror**:
 
 - `MIRROR_SSH_KEY` - SSH private key for source repository
 
@@ -122,8 +131,8 @@ Also, set up secrets:
 
 ### Requirements
 
-- mise 2026.8.14+
-- prek 0.5.0+
+- mise
+- prek
 
 ### Setup tooling
 
@@ -149,6 +158,14 @@ prek
 
 # Run all pre-commit checks
 prek --all-files
+```
+
+### Local behavior tests
+
+The entrypoint tests stub Git push operations, so they run without network access or a mirror repository:
+
+```shell
+mise run test
 ```
 
 ## License
